@@ -90,7 +90,9 @@ def extract_video_info(url: str, platform: str) -> dict:
         'quiet': True,
         'no_warnings': True,
         'extractor_args': {
-            'youtube': ['player_client=ios']
+            'youtube': {
+                'player_client': ['android', 'ios']
+            }
         }
     }
 
