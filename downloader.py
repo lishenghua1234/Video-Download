@@ -88,7 +88,10 @@ def extract_video_info(url: str, platform: str) -> dict:
         'extract_flat': False,
         'nocheckcertificate': True,
         'quiet': True,
-        'no_warnings': True
+        'no_warnings': True,
+        'extractor_args': {
+            'youtube': ['player_client=ios']
+        }
     }
 
     try:

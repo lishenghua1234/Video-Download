@@ -45,58 +45,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
 
             if (!response.ok || !data.success) {
-                // 如果后端网络在云端被判断为 Bot/IP 限流，对于 YouTube 和 Instagram 强制推到客户端解密
-                const isIg = /(?:https?:\/\/)?(?:www\.)?instagram\.com\S+/.test(url);
-                const isYt = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com|youtu\.be)\S+/.test(url);
-                if (isIg || isYt) {
-                    throw new Error("CLIENT_TUNNEL_FALLBACK");
-                } else {
-                    throw new Error(data.detail || data.error || 'Failed to extract video information.');
-                }
+                throw new Error(data.detail || data.error || 'Failed to extract video information.');
             }
             renderResult(data);
 
         } catch (error) {
-            const isIg = /(?:https?:\/\/)?(?:www\.)?instagram\.com\S+/.test(url);
-            const isYt = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com|youtu\.be)\S+/.test(url);
-
-            if (error.message === "CLIENT_TUNNEL_FALLBACK" || isIg || isYt) {
-                console.log("Backend blocked by firewall (Bot verification etc.). Executing distributed client-side extractions...");
-                try {
-                    // Try Cobalt free instance via browser
-                    const cbRes = await fetch("https://cobalt.kwiatektv.com/api/json", {
-                        method: "POST",
-                        headers: { "Accept": "application/json", "Content-Type": "application/json" },
-                        body: JSON.stringify({ url: url, isAudioOnly: false, vQuality: "max" })
-                    });
-                    const cbData = await cbRes.json();
-
-                    if (cbData && cbData.url) {
-                        const platformName = isYt ? "YouTube Video" : "Instagram Reel";
-                        const fallbackResult = {
-                            success: true,
-                            title: `${platformName} (Client Tunnel)`,
-                            thumbnail: "",
-                            platform: isYt ? "youtube" : "instagram",
-                            formats: [{
-                                resolution: "Original HD",
-                                url: cbData.url,
-                                ext: "mp4",
-                                has_audio: true
-                            }]
-                        };
-                        renderResult(fallbackResult);
-                        return; // 成功解析后截止
-                    } else {
-                        throw new Error("Client Tunnel also failed: " + JSON.stringify(cbData));
-                    }
-                } catch (cbErr) {
-                    console.warn(cbErr);
-                    showError(`${isYt ? 'YouTube' : 'Instagram'} extraction failed. Please check the URL or Try later.`);
-                }
-            } else {
-                showError(error.message);
-            }
+            showError(error.message);
         } finally {
             setLoadingState(false);
         }
