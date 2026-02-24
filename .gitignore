@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.txt
+!requirements.txt
+*.log
+temp_cookies.txt
+test_*.py
+playwright_scraper.py
+.env
