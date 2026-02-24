@@ -45,9 +45,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
 
             if (!response.ok || !data.success) {
-                // 如果后端提取失败并且是 Instagram，我们在这个 try 块外面的 catch 里拦截进行 fallback
-                if (/(?:https?:\/\/)?(?:www\.)?instagram\.com\S+/.test(url)) {
-                    throw new Error("IG_FALLBACK");
+                // 如果后端网络在云端被判断为 Bot/IP 限流，对于 YouTube 和 Instagram 强制推到客户端解密
+                const isIg = /(?:https?:\/\/)?(?:www\.)?instagram\.com\S+/.test(url);
+                const isYt = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com|youtu\.be)\S+/.test(url);
+                if (isIg || isYt) {
+                    throw new Error("CLIENT_TUNNEL_FALLBACK");
                 } else {
                     throw new Error(data.detail || data.error || 'Failed to extract video information.');
                 }
@@ -55,23 +57,27 @@ document.addEventListener('DOMContentLoaded', () => {
             renderResult(data);
 
         } catch (error) {
-            if (error.message === "IG_FALLBACK" || (/(?:https?:\/\/)?(?:www\.)?instagram\.com\S+/.test(url))) {
-                console.log("Backend blocked by IG firewall. Executing distributed client-side extractions...");
+            const isIg = /(?:https?:\/\/)?(?:www\.)?instagram\.com\S+/.test(url);
+            const isYt = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com|youtu\.be)\S+/.test(url);
+
+            if (error.message === "CLIENT_TUNNEL_FALLBACK" || isIg || isYt) {
+                console.log("Backend blocked by firewall (Bot verification etc.). Executing distributed client-side extractions...");
                 try {
                     // Try Cobalt free instance via browser
                     const cbRes = await fetch("https://cobalt.kwiatektv.com/api/json", {
                         method: "POST",
                         headers: { "Accept": "application/json", "Content-Type": "application/json" },
-                        body: JSON.stringify({ url: url, isAudioOnly: false })
+                        body: JSON.stringify({ url: url, isAudioOnly: false, vQuality: "max" })
                     });
                     const cbData = await cbRes.json();
 
                     if (cbData && cbData.url) {
+                        const platformName = isYt ? "YouTube Video" : "Instagram Reel";
                         const fallbackResult = {
                             success: true,
-                            title: "Instagram Reel (Client Tunnel)",
+                            title: `${platformName} (Client Tunnel)`,
                             thumbnail: "",
-                            platform: "instagram",
+                            platform: isYt ? "youtube" : "instagram",
                             formats: [{
                                 resolution: "Original HD",
                                 url: cbData.url,
@@ -86,7 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 } catch (cbErr) {
                     console.warn(cbErr);
-                    showError("Instagram extraction failed. Please check the URL or Try later.");
+                    showError(`${isYt ? 'YouTube' : 'Instagram'} extraction failed. Please check the URL or Try later.`);
                 }
             } else {
                 showError(error.message);
