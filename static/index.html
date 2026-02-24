@@ -4,10 +4,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>极简视频下载器 | Video Downloader</title>
+    <title>极简视频下载器 | VideoSnap</title>
     <!-- 引入外部字体 Inter，增强现代极简感 -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
+    <!-- PWA 清单 -->
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#0d0e15">
+    <link rel="apple-touch-icon" href="/static/icon-192.png">
 </head>
 
 <body>
@@ -52,6 +56,17 @@
 
     <!-- 引用核心 JS -->
     <script src="/static/script.js"></script>
+
+    <!-- 注册 PWA 桌面应用 Service Worker -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/static/service-worker.js')
+                    .then(reg => console.log('PWA ServiceWorker registered', reg.scope))
+                    .catch(err => console.error('PWA SW register failed:', err));
+            });
+        }
+    </script>
 </body>
 
 </html>
