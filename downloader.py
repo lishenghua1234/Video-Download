@@ -6,6 +6,10 @@ import re
 import os
 from urllib.parse import unquote
 
+def strip_ansi(text: str) -> str:
+    """清理 yt-dlp 等命令行工具输出中的 ANSI 颜色控制序列"""
+    return re.sub(r'\x1b\[[0-9;]*m', '', text)
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -301,5 +305,5 @@ def extract_video_info(url: str, platform: str) -> dict:
              
         return {
             "success": False,
-            "error": str(e)
+            "error": strip_ansi(str(e))
         }

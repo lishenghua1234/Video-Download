@@ -64,9 +64,29 @@ async def download_video(url: str, ext: str = "mp4"):
     if not url:
         raise HTTPException(status_code=400, detail="Missing url")
         
-    client = httpx.AsyncClient(follow_redirects=True, headers={
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
-    })
+    # 根据视频 CDN 域名动态注入对应平台的完整防盗链请求头
+    # TikTok CDN (tiktokcdn.com) 和 tikwm CDN 以及 Instagram CDN 均对 Referer/Cookie 做强校验
+    proxy_headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'identity;q=1, *;q=0',
+    }
+    
+    url_lower = url.lower()
+    if 'tiktok' in url_lower or 'tiktokcdn' in url_lower:
+        proxy_headers['Referer'] = 'https://www.tiktok.com/'
+        proxy_headers['Cookie'] = 'tt_csrf_token=none; tt_webid=1'
+    elif 'tikwm' in url_lower:
+        proxy_headers['Referer'] = 'https://www.tikwm.com/'
+    elif 'instagram' in url_lower or 'cdninstagram' in url_lower:
+        proxy_headers['Referer'] = 'https://www.instagram.com/'
+    elif 'facebook' in url_lower or 'fbcdn' in url_lower:
+        proxy_headers['Referer'] = 'https://www.facebook.com/'
+    elif 'youtube' in url_lower or 'googlevideo' in url_lower:
+        proxy_headers['Referer'] = 'https://www.youtube.com/'
+    
+    client = httpx.AsyncClient(follow_redirects=True, headers=proxy_headers, timeout=60.0)
     
     request = client.build_request("GET", url)
     try:
