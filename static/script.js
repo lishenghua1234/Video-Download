@@ -47,7 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!response.ok || !data.success) {
                 throw new Error(data.detail || data.error || 'Failed to extract video information.');
             }
-            renderResult(data);
+            renderResult(data, url);
 
         } catch (error) {
             showError(error.message);
@@ -59,17 +59,49 @@ document.addEventListener('DOMContentLoaded', () => {
     /**
      * 渲染查询结果
      * @param {Object} data - 后端返回的数据字典
+     * @param {string} origUrl - 原始查询页面地址
      */
-    function renderResult(data) {
+    function renderResult(data, origUrl) {
         // 设置标题
         document.getElementById('video-title').textContent = data.title;
 
-        // 设置封面图
+        // 设置封面图与精致的兜底状态（加入图片实际加载能力的探测）
         const thumbnailEl = document.getElementById('video-thumbnail');
-        if (data.thumbnail) {
-            thumbnailEl.style.backgroundImage = `url('${data.thumbnail}')`;
-        } else {
-            thumbnailEl.style.backgroundImage = 'none';
+
+        // 设置渐变兜底背景（默认状态）
+        const fallbackGradient = 'linear-gradient(135deg, rgba(30, 30, 40, 1) 0%, rgba(15, 15, 20, 1) 100%)';
+        thumbnailEl.style.backgroundImage = fallbackGradient;
+        thumbnailEl.style.backgroundRepeat = 'no-repeat';
+        thumbnailEl.style.backgroundPosition = 'center center';
+        thumbnailEl.style.backgroundSize = 'cover';
+
+        if (data.thumbnail && data.thumbnail.trim() !== "") {
+            // 对 Facebook 等有防盗链的平台，通过后端代理接口加载缩略图
+            const needsProxy = ['facebook'].includes(data.platform);
+            const proxyUrl = `/api/proxy_image?url=${encodeURIComponent(data.thumbnail)}`;
+            // 优先尝试的 URL 列表：代理平台先试代理，其他平台先试原始
+            const urlsToTry = needsProxy
+                ? [proxyUrl, data.thumbnail]
+                : [data.thumbnail, proxyUrl];
+
+            // 用 Image 对象逐个探测，找到第一个可用的 URL
+            function tryLoadThumb(urls, index) {
+                if (index >= urls.length) return; // 全部失败，保持渐变兜底
+                const img = new Image();
+                img.onload = function () {
+                    // 图片加载成功，设置为背景
+                    thumbnailEl.style.backgroundImage = `url('${urls[index]}'), ${fallbackGradient}`;
+                    thumbnailEl.style.backgroundRepeat = 'no-repeat, no-repeat';
+                    thumbnailEl.style.backgroundPosition = 'center center, center center';
+                    thumbnailEl.style.backgroundSize = 'cover, cover';
+                };
+                img.onerror = function () {
+                    // 加载失败，尝试下一个 URL
+                    tryLoadThumb(urls, index + 1);
+                };
+                img.src = urls[index];
+            }
+            tryLoadThumb(urlsToTry, 0);
         }
 
         // 渲染分辨率列表
@@ -100,13 +132,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         ${audioBadge}
                     </div>
                 </div>
-                <!-- 使用 fetch 获取二进制后触发 JS 下载，消除双击失灵以及跨域被阻隔的问题 -->
-                <a href="javascript:void(0);" onclick="forceDownload('${fmt.url}', this)" class="download-link">
+                <!-- 使用 fetch 获取二进制后触发 JS 下载，区分直连代理和服务端合成 -->
+                <a href="javascript:void(0);" onclick="forceDownload('${fmt.url}', '${fmt.ext}', ${fmt.needs_merge || false}, '${fmt.format_id || ''}', '${origUrl}', this)" class="download-link">
                     Download
-                </a>
-                <!-- 保留原链接的新标签页播放 -->
-                <a href="${fmt.url}" class="download-link" style="margin-top: 5px; background: transparent; color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4);" target="_blank" rel="noopener noreferrer">
-                    Play in Browser
                 </a>
             `;
             formatsList.appendChild(card);
@@ -143,23 +171,32 @@ document.addEventListener('DOMContentLoaded', () => {
     /**
      * 实现彻底跨域下载，避免使用a标签引起浏览器无响应，并在失败时fallback到浏览器播放
      */
-    window.forceDownload = async function (url, btnElement) {
+    window.forceDownload = async function (directUrl, ext, needsMerge, formatId, origUrl, btnElement) {
         const originalText = btnElement.innerText;
         btnElement.innerText = "Downloading...";
         btnElement.style.pointerEvents = "none";
         btnElement.style.opacity = "0.7";
         try {
-            const response = await fetch('/api/download?url=' + encodeURIComponent(url));
+            let apiEndpoint = '/api/download?url=' + encodeURIComponent(directUrl) + '&ext=' + encodeURIComponent(ext);
+            if (needsMerge) {
+                // 如果需要服务端合并，导向新接口，并传递原链接和轨道的 format_id
+                apiEndpoint = '/api/download_merged?url=' + encodeURIComponent(origUrl) + '&format_id=' + encodeURIComponent(formatId);
+            }
+
+            const response = await fetch(apiEndpoint);
             if (!response.ok) {
-                // 如果代理失败或对方拒绝，自动Fallback降级：直接开启新标签页供用户预览保存
-                window.open(url, '_blank');
-                throw new Error("Proxy error, opening in new tab");
+                if (!needsMerge && directUrl) {
+                    window.open(directUrl, '_blank');
+                    throw new Error("Proxy error, opening in new tab");
+                } else {
+                    throw new Error("Server Merge Failed");
+                }
             }
             const blob = await response.blob();
             const objectUrl = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = objectUrl;
-            a.download = "video.mp4";
+            a.download = "downloaded_file." + (ext || "mp4");
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);

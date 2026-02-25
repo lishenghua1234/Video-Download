@@ -1,9 +1,28 @@
 .venv/
 __pycache__/
-*.txt
-!requirements.txt
 *.log
-temp_cookies.txt
-test_*.py
-playwright_scraper.py
 .env
+
+# Node 依赖
+ig_node_module/node_modules/
+
+# 临时文件和测试产物
+temp_cookies.txt
+*.webm
+*.f251.*
+*.f299.*
+ig_dump.json
+dvgj.html
+cookies.txt
+
+# 测试脚本
+test_*.py
+test_*.js
+*_test.js
+playwright_scraper.py
+
+# IDE 和系统
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
