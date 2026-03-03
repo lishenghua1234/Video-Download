@@ -132,10 +132,10 @@ def youtube_cobalt_fallback(url: str) -> dict:
     return result
 
 
-def parse_douyin_fb_fallback(url: str, platform: str) -> dict:
+def parse_fb_ig_fallback(url: str, platform: str) -> dict:
     """
-    针对 yt-dlp 容易受到风控限制的抖音和 Facebook，提供自研的简易Fallback爬虫或者第三方接入。
-    实际生产环境中可以接入稳定的付费API接口。
+    针对 yt-dlp 容易受到风控限制的 Facebook 和 Instagram，提供自研的简易Fallback策略。
+    或在此处接入稳定的海外接口。
     """
     result = {
         "success": False,
@@ -431,7 +431,7 @@ def extract_video_info(url: str, platform: str) -> dict:
             }
         
         # 针对其他平台的后备方案处理
-        fallback_res = parse_douyin_fb_fallback(url, platform)
+        fallback_res = parse_fb_ig_fallback(url, platform)
         if fallback_res.get('success'):
              return fallback_res
              
