@@ -27,6 +27,111 @@ def get_cookie_opts() -> dict:
 
 
 
+# cobalt.tools API 实例列表（主实例 + 备用实例）
+COBALT_API_INSTANCES = [
+    'https://api.cobalt.tools',
+]
+
+def youtube_cobalt_fallback(url: str) -> dict:
+    """
+    当 yt-dlp 对 YouTube 失败时，使用 cobalt.tools API 作为后备方案。
+    cobalt.tools 有自己的服务器基础设施，不受数据中心 IP 限制。
+    """
+    result = {
+        "success": False,
+        "title": "YouTube Video",
+        "thumbnail": "/static/icon-192.png",
+        "platform": "youtube",
+        "formats": []
+    }
+    
+    headers = {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+    }
+    
+    # 尝试多个画质，为用户提供选项
+    qualities = ['1080', '720', '480', '360']
+    
+    for api_base in COBALT_API_INSTANCES:
+        try:
+            for quality in qualities:
+                payload = {
+                    'url': url,
+                    'videoQuality': quality,
+                    'youtubeVideoCodec': 'h264',
+                    'downloadMode': 'auto',
+                    'filenameStyle': 'basic',
+                }
+                
+                resp = requests.post(
+                    f'{api_base}/',
+                    json=payload,
+                    headers=headers,
+                    timeout=15
+                )
+                
+                if resp.status_code != 200:
+                    logger.warning(f"[Cobalt] API 返回 {resp.status_code}: {resp.text[:200]}")
+                    break  # 换下一个实例
+                
+                data = resp.json()
+                status = data.get('status')
+                
+                if status in ('tunnel', 'redirect'):
+                    download_url = data.get('url', '')
+                    filename = data.get('filename', '')
+                    
+                    # 从第一个成功的响应中提取标题
+                    if filename and not result['formats']:
+                        # 清理文件名作为标题
+                        title = filename.rsplit('.', 1)[0] if '.' in filename else filename
+                        result['title'] = title
+                    
+                    result['formats'].append({
+                        "resolution": f"{quality}p",
+                        "url": download_url,
+                        "ext": "mp4",
+                        "has_audio": True,
+                        "has_video": True,
+                        "cobalt": True,  # 标记为 cobalt 来源
+                    })
+                    
+                elif status == 'picker':
+                    # 多个可选项（比如有音频和视频分离的情况）
+                    picker_items = data.get('picker', [])
+                    for item in picker_items:
+                        item_url = item.get('url', '')
+                        if item_url:
+                            result['formats'].append({
+                                "resolution": f"{quality}p",
+                                "url": item_url,
+                                "ext": "mp4",
+                                "has_audio": True,
+                                "has_video": True,
+                                "cobalt": True,
+                            })
+                    break  # picker 模式下不需要继续尝试其他画质
+                    
+                elif status == 'error':
+                    error_code = data.get('error', {}).get('code', 'unknown')
+                    logger.warning(f"[Cobalt] 错误: {error_code}")
+                    break  # 换下一个实例
+            
+            # 如果获取到了格式，直接返回
+            if result['formats']:
+                result['success'] = True
+                logger.info(f"[Cobalt] 成功获取 {len(result['formats'])} 个格式")
+                return result
+                
+        except Exception as e:
+            logger.error(f"[Cobalt] API 请求失败 ({api_base}): {e}")
+            continue  # 尝试下一个实例
+    
+    result['error'] = "Cobalt API 也无法获取该视频，YouTube 对此视频有严格限制"
+    return result
+
+
 def parse_douyin_fb_fallback(url: str, platform: str) -> dict:
     """
     针对 yt-dlp 容易受到风控限制的抖音和 Facebook，提供自研的简易Fallback爬虫或者第三方接入。
@@ -313,7 +418,14 @@ def extract_video_info(url: str, platform: str) -> dict:
     except Exception as e:
         logger.error(f"Error extracting video info via yt-dlp for {url}: {e}")
         
-        # 针对失败做其他后备方案处理
+        # YouTube 专用后备方案：使用 cobalt.tools API
+        if platform == 'youtube':
+            logger.info(f"[YouTube] yt-dlp 失败，尝试 cobalt.tools API 后备方案...")
+            cobalt_res = youtube_cobalt_fallback(url)
+            if cobalt_res.get('success'):
+                return cobalt_res
+        
+        # 针对其他平台的后备方案处理
         fallback_res = parse_douyin_fb_fallback(url, platform)
         if fallback_res.get('success'):
              return fallback_res
