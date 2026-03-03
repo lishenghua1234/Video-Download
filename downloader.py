@@ -13,6 +13,20 @@ def strip_ansi(text: str) -> str:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# cookies 文件路径（优先使用文件，其次从浏览器读取）
+COOKIES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cookies.txt')
+
+def get_cookie_opts() -> dict:
+    """获取 yt-dlp 的 cookies 配置：有 cookies.txt 就用，没有就不加"""
+    if os.path.exists(COOKIES_FILE):
+        logger.info(f"[Cookies] 使用 cookies 文件: {COOKIES_FILE}")
+        return {'cookiefile': COOKIES_FILE}
+    else:
+        logger.info("[Cookies] cookies.txt 不存在，跳过 cookies 配置")
+        return {}
+
+
+
 def parse_douyin_fb_fallback(url: str, platform: str) -> dict:
     """
     针对 yt-dlp 容易受到风控限制的抖音和 Facebook，提供自研的简易Fallback爬虫或者第三方接入。
@@ -161,7 +175,8 @@ def extract_video_info(url: str, platform: str) -> dict:
         'extract_flat': False,
         'nocheckcertificate': True,
         'quiet': True,
-        'no_warnings': True
+        'no_warnings': True,
+        **get_cookie_opts(),  # 注入 cookies 配置（解决 YouTube 机器人检测）
     }
 
 

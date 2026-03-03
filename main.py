@@ -183,14 +183,18 @@ def download_merged_video(url: str, format_id: str, background_tasks: Background
     ffmpeg_exe, _ = get_or_fetch_platform_executables_else_raise()
     
     # 构建包含合并指令的 yt-dlp 进程
+    cookies_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cookies.txt')
     cmd = [
         "yt-dlp",
         "-f", format_id,
         "--merge-output-format", "mp4",
         "--ffmpeg-location", ffmpeg_exe,
         "-o", out_path,
-        url
     ]
+    # 添加 cookies 参数（如果有 cookies.txt 文件就使用，没有就跳过）
+    if os.path.exists(cookies_file):
+        cmd.extend(["--cookies", cookies_file])
+    cmd.append(url)
     
     # 在 FastAPI 默认的同步路由中，代码会自动抛到线程池执行，不会阻塞主线程！
     process = subprocess.run(cmd, capture_output=True, text=True)
