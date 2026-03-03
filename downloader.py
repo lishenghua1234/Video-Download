@@ -424,6 +424,11 @@ def extract_video_info(url: str, platform: str) -> dict:
             cobalt_res = youtube_cobalt_fallback(url)
             if cobalt_res.get('success'):
                 return cobalt_res
+            # YouTube 所有方案均失败，返回友好提示
+            return {
+                "success": False,
+                "error": "YouTube 视频在云端服务器上暂时无法下载（YouTube 限制了服务器 IP 的访问）。请使用本地桌面应用下载 YouTube 视频，其他平台（TikTok、Instagram、X 等）不受影响。"
+            }
         
         # 针对其他平台的后备方案处理
         fallback_res = parse_douyin_fb_fallback(url, platform)
@@ -434,3 +439,4 @@ def extract_video_info(url: str, platform: str) -> dict:
             "success": False,
             "error": strip_ansi(str(e))
         }
+
